@@ -1128,6 +1128,7 @@ def factor_positions(factor_data,
 
 def create_pyfolio_input(factor_data,
                          period,
+                         prices=None,
                          capital=None,
                          long_short=True,
                          group_neutral=False,
@@ -1158,8 +1159,15 @@ def create_pyfolio_input(factor_data,
     period : string
         'factor_data' column name corresponding to the 'period' returns to be
         used in the computation of porfolio returns
+    prices : pd.DataFrame, optional
+        Price data used to compute 'transactions' data. If not provided
+        'transactions' will be returned as 'None'
+        See utils.get_clean_factor_and_forward_returns for details on how
+        price should be formatted
     capital : float, optional
-        If set, then compute 'positions' in dollar amount instead of percentage
+        Initial capital used in the simulated portfolio. This is used to
+        compute 'transactions' and to transform 'positions' from percentage
+        to dollar amount
     long_short : bool, optional
         if True enforce a dollar neutral long-short portfolio: asset weights
         will be computed by demeaning factor values and dividing by the sum of
@@ -1220,6 +1228,16 @@ def create_pyfolio_input(factor_data,
             2004-01-12    14492.6300     -14624.8700     27.1821
             2004-01-13    -13853.2800    13653.6400      -43.6375
 
+     transactions : pd.DataFrame
+        Executed trade volumes and fill prices.
+        - One row per trade.
+        - Trades on different names that occur at the
+          same time will have identical indicies.
+        - Example:
+            index                  amount   price    symbol
+            2004-01-09 12:18:01    483      324.12   'AAPL'
+            2004-01-09 12:18:01    122      83.10    'MSFT'
+            2004-01-13 14:12:23    -75      340.43   'AAPL'
 
      benchmark : pd.Series
         Benchmark returns computed as the factor universe mean daily returns.
@@ -1265,7 +1283,15 @@ def create_pyfolio_input(factor_data,
             cumrets.reindex(positions.index) * capital, axis=0)
 
     #
+    # Build transactions
     #
+    if prices is not None:
+        transactions = positions.diff()
+        transactions = transactions.fillna(positions)
+        transactions = transactions.stack().reset_index(level=1)
+    else:
+        transactions = None
+
     #
     # Build benchmark returns as the factor universe mean returns traded at
     # 'benchmark_period' frequency
@@ -1286,4 +1312,4 @@ def create_pyfolio_input(factor_data,
     else:
         benchmark_rets = None
 
-    return returns, positions, benchmark_rets
+    return returns, positions, transactions, benchmark_rets
